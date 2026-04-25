@@ -5,34 +5,31 @@ from torch.utils.data import Dataset, DataLoader
 class FlowDataset(Dataset):
     def __init__(self, tensor_dir="tensors"):
         self.tensor_dir = tensor_dir
-        # Note: os.listdir on millions of files will take a few moments upon initialization
-        self.file_list = [f for f in os.listdir(tensor_dir) if f.endswith('.pt')]
+        self.file_paths = [
+            os.path.join(tensor_dir, f) 
+            for f in os.listdir(tensor_dir) 
+            if f.endswith('.pt')
+        ]
 
     def __len__(self):
-        return len(self.file_list)
+        return len(self.file_paths)
 
     def __getitem__(self, idx):
-        file_path = os.path.join(self.tensor_dir, self.file_list[idx])
+        path = self.file_paths[idx]
+        payload = torch.load(path, weights_only=False)
         
-        # Load the dictionary containing both the tensor and the stats
-        data = torch.load(file_path, weights_only=True)
+        tensor = payload['tensor']
+        label = str(payload['stats']['label'])
         
-        flow_tensor = data['tensor']  # Expected Shape: (10, 60)
-        stats = data['stats']         # Dict containing 'label', 'duration', etc.
-        
-        raw_label = str(stats['label'])
-        
-        # 3-Class Classification Logic
-        if raw_label.startswith('From-Botnet'):
-            encoded_label = 2  # Malicious Botnet Traffic
-        elif raw_label.startswith('From-Normal'):
-            encoded_label = 1  # Verified Benign Human Traffic
+        if "Botnet" in label:
+            cls_idx = 2
+        elif "Normal" in label:
+            cls_idx = 1
         else:
-            encoded_label = 0  # Unverified Background Noise
+            cls_idx = 0
             
-        return flow_tensor, encoded_label
+        return tensor, torch.tensor(cls_idx, dtype=torch.long)
 
-# Quick execution test
 if __name__ == "__main__":
     print("[INFO] Initializing Dataset...")
     dataset = FlowDataset()
@@ -42,6 +39,5 @@ if __name__ == "__main__":
         sample_tensor, sample_label = dataset[0]
         print(f"Tensor Shape: {sample_tensor.shape}")
         
-        # Map back to string for verification in the printout
         class_names = {0: "Background", 1: "Normal", 2: "Botnet"}
-        print(f"Encoded Flow Label: {sample_label} ({class_names[sample_label]})")
+        print(f"Encoded Flow Label: {sample_label} ({class_names[sample_label.item()]})")
