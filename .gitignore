@@ -1,2 +1,4 @@
 datasetCTU/
+outputs/
 tensors/
+__pycache__/
